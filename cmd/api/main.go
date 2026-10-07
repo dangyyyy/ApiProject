@@ -47,13 +47,7 @@ func run() error {
 	taskStore := database.NewTaskStore(db)
 	handler := handlers.NewHandlers(taskStore)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /tasks", handler.GetAllTasks)
-	mux.HandleFunc("POST /tasks", handler.CreateTask)
-	mux.HandleFunc("GET /tasks/{id}", handler.GetTaskByID)
-	mux.HandleFunc("PUT /tasks/{id}", handler.UpdateTaskByID)
-	mux.HandleFunc("DELETE /tasks/{id}", handler.DeleteTaskByID)
-	handlerChain := middleware.Chain(mux,
+	handlerChain := middleware.Chain(handler.Routes(),
 		middleware.RequestID,
 		middleware.Logging,
 		middleware.Recover,

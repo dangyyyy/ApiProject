@@ -20,12 +20,28 @@ const (
 	dbTimeout    = 3 * time.Second
 )
 
+type TaskStore interface {
+	GetAll(ctx context.Context) ([]models.Task, error)
+	GetByID(ctx context.Context, id int) (*models.Task, error)
+	Create(ctx context.Context, input *models.CreateTaskInput) (*models.Task, error)
+	Update(ctx context.Context, id int, input *models.UpdateTaskInput) (*models.Task, error)
+	Delete(ctx context.Context, id int) error
+}
 type Handlers struct {
-	store *database.TaskStore
+	store TaskStore
 }
 
-func NewHandlers(store *database.TaskStore) *Handlers {
+func NewHandlers(store TaskStore) *Handlers {
 	return &Handlers{store: store}
+}
+func (h *Handlers) Routes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /tasks", h.GetAllTasks)
+	mux.HandleFunc("POST /tasks", h.CreateTask)
+	mux.HandleFunc("GET /tasks/{id}", h.GetTaskByID)
+	mux.HandleFunc("PUT /tasks/{id}", h.UpdateTaskByID)
+	mux.HandleFunc("DELETE /tasks/{id}", h.DeleteTaskByID)
+	return mux
 }
 
 func respondWithJSON(w http.ResponseWriter, statusCode int, payload any) {
