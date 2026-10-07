@@ -1,0 +1,7 @@
+.idea/
+.DS_Store
+/api
+*.exe
+*.test
+*.out
+.env
