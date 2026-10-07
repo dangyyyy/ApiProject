@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,7 +32,7 @@ func respondWithJSON(w http.ResponseWriter, statusCode int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("failed to encode response: %v", err)
+		slog.Error("failed to encode response", "error", err)
 	}
 }
 
@@ -40,21 +40,21 @@ func respondWithError(w http.ResponseWriter, statusCode int, message string) {
 	respondWithJSON(w, statusCode, map[string]string{"error": message})
 }
 
-func respondWithStoreError(w http.ResponseWriter, err error) {
+func respondWithStoreError(w http.ResponseWriter, r *http.Request, err error) {
+	ctx := r.Context()
 	switch {
 	case errors.Is(err, database.ErrNotFound):
 		respondWithError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, context.DeadlineExceeded):
-		log.Printf("store timeout %v", err)
+		slog.WarnContext(ctx, "store timeout", "error", err)
 		respondWithError(w, http.StatusGatewayTimeout, "request timed out")
 	case errors.Is(err, context.Canceled):
-		log.Printf("store cancel %v", err)
+		slog.InfoContext(ctx, "request canceled by client", "error", err)
 	default:
-		log.Printf("store error: %v", err)
+		slog.ErrorContext(ctx, "store error", "error", err)
 		respondWithError(w, http.StatusInternalServerError, "internal server error")
 	}
 }
-
 func parseID(r *http.Request) (int, error) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
@@ -89,7 +89,7 @@ func (h *Handlers) GetAllTasks(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	tasks, err := h.store.GetAll(ctx)
 	if err != nil {
-		respondWithStoreError(w, err)
+		respondWithStoreError(w, r, err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, tasks)
@@ -106,7 +106,7 @@ func (h *Handlers) GetTaskByID(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	task, err := h.store.GetByID(ctx, id)
 	if err != nil {
-		respondWithStoreError(w, err)
+		respondWithStoreError(w, r, err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, task)
@@ -127,7 +127,7 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	task, err := h.store.Create(ctx, &input)
 	if err != nil {
-		respondWithStoreError(w, err)
+		respondWithStoreError(w, r, err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, task)
@@ -153,7 +153,7 @@ func (h *Handlers) UpdateTaskByID(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	task, err := h.store.Update(ctx, id, &input)
 	if err != nil {
-		respondWithStoreError(w, err)
+		respondWithStoreError(w, r, err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, task)
@@ -169,7 +169,7 @@ func (h *Handlers) DeleteTaskByID(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
 	defer cancel()
 	if err := h.store.Delete(ctx, id); err != nil {
-		respondWithStoreError(w, err)
+		respondWithStoreError(w, r, err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, map[string]string{"result": "success"})

@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -19,6 +19,6 @@ func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(map[string]string{"error": message}); err != nil {
-		log.Printf("failed to encode error response: %s", err)
+		slog.Error("failed to encode error response", "error", err)
 	}
 }

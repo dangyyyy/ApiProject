@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -36,13 +36,24 @@ func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
 		next.ServeHTTP(rec, r)
-		log.Printf("[%s] %s %s %d %dB %s",
-			RequestIDFromContext(r.Context()),
-			r.Method,
-			r.URL.Path,
-			rec.status,
-			rec.bytes,
-			time.Since(start))
+
+		level := slog.LevelInfo
+		switch {
+		case rec.status >= 500:
+			level = slog.LevelError
+		case rec.status >= 400:
+			level = slog.LevelWarn
+		}
+
+		slog.LogAttrs(r.Context(), level, "http request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", rec.status),
+			slog.Int("bytes", rec.bytes),
+			slog.Duration("duration", time.Since(start)),
+			slog.String("remote_addr", r.RemoteAddr),
+		)
 	})
 }

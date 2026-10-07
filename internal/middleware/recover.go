@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 )
@@ -16,7 +16,10 @@ func Recover(next http.Handler) http.Handler {
 			if rec == http.ErrAbortHandler {
 				panic(rec)
 			}
-			log.Printf("[%s] panic: %v\n%s", RequestIDFromContext(r.Context()), rec, debug.Stack())
+			slog.ErrorContext(r.Context(), "panic recovered",
+				"panic", rec,
+				"stack", string(debug.Stack()),
+			)
 			writeJSONError(w, http.StatusInternalServerError, "internal server error")
 		}()
 		next.ServeHTTP(w, r)

@@ -3,11 +3,12 @@ package main
 import (
 	"apiproject/internal/database"
 	"apiproject/internal/handlers"
+	"apiproject/internal/logger"
 	"apiproject/internal/middleware"
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,8 +19,10 @@ import (
 const shutdownTimeout = 10 * time.Second
 
 func main() {
+	slog.SetDefault(logger.New(os.Getenv("LOG_FORMAT"), os.Getenv("LOG_LEVEL")))
 	if err := run(); err != nil {
-		log.Fatalf("%+v", err)
+		slog.Error("application stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -39,7 +42,7 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	log.Println("Database connected")
+	slog.Info("database connected")
 
 	taskStore := database.NewTaskStore(db)
 	handler := handlers.NewHandlers(taskStore)
@@ -66,7 +69,7 @@ func run() error {
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("Starting server on port %s", serverPort)
+		slog.Info("starting server", "port", serverPort)
 		errCh <- srv.ListenAndServe()
 	}()
 	select {
@@ -74,7 +77,7 @@ func run() error {
 		return fmt.Errorf("server error: %w", err)
 
 	case <-ctx.Done():
-		log.Println("Shutdown signal received")
+		slog.Info("shutdown signal received")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -83,8 +86,8 @@ func run() error {
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
 	if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("server  error: %w", err)
+		return fmt.Errorf("server error: %w", err)
 	}
-	log.Println("Server shutdown")
+	slog.Info("server stopped")
 	return nil
 }
