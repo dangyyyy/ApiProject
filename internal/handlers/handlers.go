@@ -10,18 +10,23 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
-	maxBodyBytes = 1 << 20
-	dbTimeout    = 3 * time.Second
+	maxBodyBytes    = 1 << 20
+	dbTimeout       = 3 * time.Second
+	defaultLimit    = 20
+	maxLimit        = 100
+	maxSearchLength = 100
 )
 
 type TaskStore interface {
-	GetAll(ctx context.Context) ([]models.Task, error)
+	List(ctx context.Context, filter models.TaskFilter) ([]models.Task, int, error)
 	GetByID(ctx context.Context, id int) (*models.Task, error)
 	Create(ctx context.Context, input *models.CreateTaskInput) (*models.Task, error)
 	Update(ctx context.Context, id int, input *models.UpdateTaskInput) (*models.Task, error)
@@ -36,7 +41,7 @@ func NewHandlers(store TaskStore) *Handlers {
 }
 func (h *Handlers) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /tasks", h.GetAllTasks)
+	mux.HandleFunc("GET /tasks", h.ListTasks)
 	mux.HandleFunc("POST /tasks", h.CreateTask)
 	mux.HandleFunc("GET /tasks/{id}", h.GetTaskByID)
 	mux.HandleFunc("PUT /tasks/{id}", h.UpdateTaskByID)
@@ -100,15 +105,81 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	return nil
 }
 
-func (h *Handlers) GetAllTasks(w http.ResponseWriter, r *http.Request) {
+func parseTaskFilter(q url.Values) (models.TaskFilter, error) {
+	f := models.TaskFilter{
+		Search: strings.TrimSpace(q.Get("search")),
+		Sort:   "created_at",
+		Order:  "desc",
+		Limit:  defaultLimit,
+	}
+
+	if v := q.Get("completed"); v != "" {
+		completed, err := strconv.ParseBool(v)
+		if err != nil {
+			return f, errors.New("completed must be true or false")
+		}
+		f.Completed = &completed
+	}
+
+	if v := q.Get("limit"); v != "" {
+		limit, err := strconv.Atoi(v)
+		if err != nil || limit < 1 || limit > maxLimit {
+			return f, fmt.Errorf("limit must be between 1 and %d", maxLimit)
+		}
+		f.Limit = limit
+	}
+
+	if v := q.Get("offset"); v != "" {
+		offset, err := strconv.Atoi(v)
+		if err != nil || offset < 0 {
+			return f, errors.New("offset must be a non-negative integer")
+		}
+		f.Offset = offset
+	}
+
+	if v := q.Get("sort"); v != "" {
+		if v != "created_at" && v != "title" {
+			return f, errors.New("sort must be created_at or title")
+		}
+		f.Sort = v
+	}
+
+	if v := q.Get("order"); v != "" {
+		if v != "asc" && v != "desc" {
+			return f, errors.New("order must be asc or desc")
+		}
+		f.Order = v
+	}
+
+	if utf8.RuneCountInString(f.Search) > maxSearchLength {
+		return f, fmt.Errorf("search must be at most %d characters", maxSearchLength)
+	}
+
+	return f, nil
+}
+
+func (h *Handlers) ListTasks(w http.ResponseWriter, r *http.Request) {
+	filter, err := parseTaskFilter(r.URL.Query())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
 	defer cancel()
-	tasks, err := h.store.GetAll(ctx)
+
+	tasks, total, err := h.store.List(ctx, filter)
 	if err != nil {
 		respondWithStoreError(w, r, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, tasks)
+
+	respondWithJSON(w, http.StatusOK, models.TaskPage{
+		Items:  tasks,
+		Total:  total,
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	})
 }
 
 func (h *Handlers) GetTaskByID(w http.ResponseWriter, r *http.Request) {

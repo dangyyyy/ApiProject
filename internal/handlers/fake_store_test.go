@@ -6,15 +6,15 @@ import (
 )
 
 type fakeStore struct {
-	getAllFn  func(ctx context.Context) ([]models.Task, error)
+	listFn    func(ctx context.Context, filter models.TaskFilter) ([]models.Task, int, error)
 	getByIDFn func(ctx context.Context, id int) (*models.Task, error)
 	createFn  func(ctx context.Context, input *models.CreateTaskInput) (*models.Task, error)
 	updateFn  func(ctx context.Context, id int, input *models.UpdateTaskInput) (*models.Task, error)
 	deleteFn  func(ctx context.Context, id int) error
 }
 
-func (f *fakeStore) GetAll(ctx context.Context) ([]models.Task, error) {
-	return f.getAllFn(ctx)
+func (f *fakeStore) List(ctx context.Context, filter models.TaskFilter) ([]models.Task, int, error) {
+	return f.listFn(ctx, filter)
 }
 
 func (f *fakeStore) GetByID(ctx context.Context, id int) (*models.Task, error) {

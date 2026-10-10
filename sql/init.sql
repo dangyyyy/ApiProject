@@ -8,7 +8,8 @@ CREATE TABLE tasks (
                        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
                        updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-
+CREATE INDEX idx_tasks_created_at ON tasks (created_at DESC, id DESC);
+CREATE INDEX idx_tasks_completed_created_at ON tasks (completed, created_at DESC, id DESC);
 INSERT INTO tasks (title, description, completed) VALUES
                                                       ('Изучить Go', 'Написать REST API', false),
                                                       ('Написать REST', 'Посмотреть видео', true);

@@ -23,7 +23,21 @@ type CreateTaskInput struct {
 	Description string `json:"description"`
 	Completed   bool   `json:"completed"`
 }
+type TaskFilter struct {
+	Completed *bool
+	Search    string
+	Sort      string
+	Order     string
+	Limit     int
+	Offset    int
+}
 
+type TaskPage struct {
+	Items  []Task `json:"items"`
+	Total  int    `json:"total"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
+}
 type UpdateTaskInput struct {
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
