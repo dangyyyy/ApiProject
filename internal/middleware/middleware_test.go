@@ -90,7 +90,7 @@ func TestJSONErrors(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"error":"task not found"}`))
+				_, _ = w.Write([]byte(`{"error":"task not found"}`))
 			},
 			wantStatus: http.StatusNotFound,
 			wantBody:   `{"error":"task not found"}`,
@@ -106,7 +106,7 @@ func TestJSONErrors(t *testing.T) {
 		{
 			name: "200 body passes through",
 			handler: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("hello"))
+				_, _ = w.Write([]byte("hello"))
 			},
 			wantStatus: http.StatusOK,
 			wantBody:   "hello",
@@ -184,7 +184,7 @@ func TestLogging_RecordsStatusAndBytes(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotRecorder = w.(*statusRecorder)
 		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte("12345"))
+		_, _ = w.Write([]byte("12345"))
 	})
 
 	rec := serve(Logging(inner), httptest.NewRequest(http.MethodGet, "/", nil))

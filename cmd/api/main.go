@@ -49,7 +49,11 @@ func run(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			slog.Error("failed to close database", "error", err)
+		}
+	}()
 	slog.Info("database connected")
 	if err := database.Migrate(ctx, db); err != nil {
 		return err
