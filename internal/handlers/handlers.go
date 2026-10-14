@@ -41,6 +41,7 @@ func NewHandlers(store TaskStore) *Handlers {
 }
 func (h *Handlers) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", h.Health)
 	mux.HandleFunc("GET /tasks", h.ListTasks)
 	mux.HandleFunc("POST /tasks", h.CreateTask)
 	mux.HandleFunc("GET /tasks/{id}", h.GetTaskByID)
@@ -260,4 +261,7 @@ func (h *Handlers) DeleteTaskByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondWithJSON(w, http.StatusOK, map[string]string{"result": "success"})
+}
+func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
+	respondWithJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

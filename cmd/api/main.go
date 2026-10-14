@@ -1,6 +1,7 @@
 package main
 
 import (
+	"apiproject/internal/config"
 	"apiproject/internal/database"
 	"apiproject/internal/handlers"
 	"apiproject/internal/logger"
@@ -8,36 +9,43 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 const shutdownTimeout = 10 * time.Second
 
 func main() {
-	slog.SetDefault(logger.New(os.Getenv("LOG_FORMAT"), os.Getenv("LOG_LEVEL")))
-	if err := run(); err != nil {
+	if err := godotenv.Load(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Error("failed to load .env file", "error", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
+	slog.SetDefault(logger.New(cfg.LogFormat, cfg.LogLevel))
+
+	if err := run(cfg); err != nil {
 		slog.Error("application stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = "postgres://taskuser:taskpass@localhost:5432/tasksdb?sslmode=disable"
-	}
-	serverPort := os.Getenv("SERVER_PORT")
-	if serverPort == "" {
-		serverPort = "8080"
-	}
+func run(cfg config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	db, err := database.Connect(ctx, databaseURL)
+	db, err := database.Connect(ctx, cfg.DB.URL())
 	if err != nil {
 		return err
 	}
@@ -57,7 +65,7 @@ func run() error {
 		middleware.JSONErrors,
 	)
 	srv := &http.Server{
-		Addr:              ":" + serverPort,
+		Addr:              ":" + cfg.ServerPort,
 		Handler:           handlerChain,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -66,7 +74,7 @@ func run() error {
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("starting server", "port", serverPort)
+		slog.Info("starting server", "port", cfg.ServerPort)
 		errCh <- srv.ListenAndServe()
 	}()
 	select {
