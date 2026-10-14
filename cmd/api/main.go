@@ -43,6 +43,9 @@ func run() error {
 	}
 	defer db.Close()
 	slog.Info("database connected")
+	if err := database.Migrate(ctx, db); err != nil {
+		return err
+	}
 
 	taskStore := database.NewTaskStore(db)
 	handler := handlers.NewHandlers(taskStore)
